@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import React, { useMemo, forwardRef } from "react";
 
 interface GaugeProps {
   revenue: number;
@@ -9,7 +9,7 @@ interface GaugeProps {
   allocations: number;
 }
 
-const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, allocations }: GaugeProps) => {
+const SafeToInvestGauge = forwardRef<HTMLDivElement, GaugeProps>(({ revenue, payments, operations, vendor, debt, allocations }, ref) => {
   const safeToInvest = useMemo(
     () => (revenue - payments) - (operations + vendor + debt + allocations),
     [revenue, payments, operations, vendor, debt, allocations]
@@ -19,18 +19,16 @@ const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, alloca
   const percentage = maxValue > 0 ? Math.max(0, Math.min(100, (safeToInvest / maxValue) * 100)) : 0;
   const isHealthy = safeToInvest > 0;
 
-  // SVG arc params
   const radius = 80;
   const circumference = 2 * Math.PI * radius;
-  const arcLength = circumference * 0.75; // 270 degrees
+  const arcLength = circumference * 0.75;
   const filledLength = arcLength * (percentage / 100);
-  const rotation = 135; // start from bottom-left
+  const rotation = 135;
 
   return (
-    <div className="flex flex-col items-center gap-6">
+    <div ref={ref} className="flex flex-col items-center gap-6">
       <div className="relative w-52 h-52">
         <svg viewBox="0 0 200 200" className="w-full h-full -rotate-[0deg]">
-          {/* Background arc */}
           <circle
             cx="100" cy="100" r={radius}
             fill="none"
@@ -40,7 +38,6 @@ const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, alloca
             strokeLinecap="round"
             transform={`rotate(${rotation} 100 100)`}
           />
-          {/* Filled arc */}
           <circle
             cx="100" cy="100" r={radius}
             fill="none"
@@ -55,7 +52,6 @@ const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, alloca
             }}
           />
         </svg>
-        {/* Center value */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={`text-4xl font-black tracking-tight ${isHealthy ? "text-gradient-signal" : "text-destructive"}`}>
             ${Math.abs(safeToInvest).toLocaleString()}
@@ -66,7 +62,6 @@ const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, alloca
         </div>
       </div>
 
-      {/* Formula breakdown */}
       <div className="grid grid-cols-3 gap-x-8 gap-y-2 text-xs">
         <FormulaItem label="Revenue" value={revenue} positive />
         <FormulaItem label="Payments" value={payments} />
@@ -77,7 +72,9 @@ const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, alloca
       </div>
     </div>
   );
-};
+});
+
+SafeToInvestGauge.displayName = "SafeToInvestGauge";
 
 const FormulaItem = ({ label, value, positive }: { label: string; value: number; positive?: boolean }) => (
   <div className="flex flex-col items-center gap-0.5">

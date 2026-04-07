@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, forwardRef } from "react";
 import { FileText, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -36,14 +36,17 @@ const mapRow = (row: LedgerRow): Invoice => ({
   reconciled: !!row.reconciled,
 });
 
+type ConnectionStatus = "CONNECTED" | "ERROR" | "AUTH_REQUIRED";
+
 interface ReconciliationStreamProps {
   onDataLoaded?: (invoices: Invoice[]) => void;
 }
 
-const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
+const ReconciliationStream = forwardRef<HTMLDivElement, ReconciliationStreamProps>(({ onDataLoaded }, ref) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("AUTH_REQUIRED");
 
   const updateAndNotify = useCallback((updater: (prev: Invoice[]) => Invoice[]) => {
     setInvoices((prev) => {
@@ -54,17 +57,24 @@ const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
   }, [onDataLoaded]);
 
   const fetchInvoices = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("financial_ledger")
-      .select("id, supplier_name, gross_amount, reconciled, created_at")
-      .order("created_at", { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from("financial_ledger")
+        .select("id, supplier_name, gross_amount, reconciled, created_at")
+        .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Failed to fetch financial_ledger:", error.message);
-    } else if (data) {
-      const mapped = (data as LedgerRow[]).map(mapRow);
-      setInvoices(mapped);
-      onDataLoaded?.(mapped);
+      if (error) {
+        console.error("Failed to fetch financial_ledger:", error.message);
+        setConnectionStatus(error.message.includes("JWT") || error.code === "401" ? "AUTH_REQUIRED" : "ERROR");
+      } else if (data) {
+        const mapped = (data as LedgerRow[]).map(mapRow);
+        setInvoices(mapped);
+        onDataLoaded?.(mapped);
+        setConnectionStatus("CONNECTED");
+      }
+    } catch (err) {
+      console.error("Supabase connection error:", err);
+      setConnectionStatus("ERROR");
     }
     setLoading(false);
   }, [onDataLoaded]);
@@ -97,15 +107,27 @@ const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setConnectionStatus("CONNECTED");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setConnectionStatus("ERROR");
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [fetchInvoices, updateAndNotify]);
 
+  const statusColor = connectionStatus === "CONNECTED"
+    ? "text-signal"
+    : connectionStatus === "ERROR"
+    ? "text-destructive"
+    : "text-warning";
+
   return (
-    <div className="flex flex-col gap-1">
+    <div ref={ref} className="flex flex-col gap-1">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
           Reconciliation Stream
@@ -161,8 +183,21 @@ const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
           })}
         </div>
       )}
+
+      {/* Connection Status Footer */}
+      <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-border/30">
+        <div className={`w-1.5 h-1.5 rounded-full ${
+          connectionStatus === "CONNECTED" ? "bg-signal animate-pulse-glow" :
+          connectionStatus === "ERROR" ? "bg-destructive" : "bg-warning"
+        }`} />
+        <span className={`text-[10px] font-medium uppercase tracking-widest ${statusColor}`}>
+          {connectionStatus === "CONNECTED" ? "Connected" : connectionStatus === "ERROR" ? "Error" : "Auth Required"}
+        </span>
+      </div>
     </div>
   );
-};
+});
+
+ReconciliationStream.displayName = "ReconciliationStream";
 
 export default ReconciliationStream;
