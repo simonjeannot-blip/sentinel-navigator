@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FileText, Eye, ShieldCheck } from "lucide-react";
+import { supabase } from "@/integrations/supabaseClient";
 
 type InvoiceStatus = "intake" | "vision" | "reconciled";
 
@@ -9,7 +10,6 @@ interface Invoice {
   amount: number;
   status: InvoiceStatus;
   ref: string;
-  matchedAt?: number;
 }
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; sublabel: string; color: string; icon: typeof FileText }> = {
@@ -18,36 +18,75 @@ const STATUS_CONFIG: Record<InvoiceStatus, { label: string; sublabel: string; co
   reconciled: { label: "Reconciled", sublabel: "Sentinel", color: "bg-reconciled", icon: ShieldCheck },
 };
 
-const MOCK_INVOICES: Invoice[] = [
-  { id: "1", vendor: "Atlas Freight Co.", amount: 14250, status: "reconciled", ref: "INV-4821", matchedAt: Date.now() - 120000 },
-  { id: "2", vendor: "Meridian Supply", amount: 8730, status: "vision", ref: "INV-4819" },
-  { id: "3", vendor: "Ironclad Logistics", amount: 22100, status: "intake", ref: "INV-4817" },
-  { id: "4", vendor: "Northline Capital", amount: 5400, status: "reconciled", ref: "INV-4815", matchedAt: Date.now() - 60000 },
-  { id: "5", vendor: "Vertex Materials", amount: 31050, status: "vision", ref: "INV-4812" },
-  { id: "6", vendor: "Summit Holdings", amount: 9800, status: "intake", ref: "INV-4810" },
-];
+interface LedgerRow {
+  id: string;
+  supplier_name: string;
+  gross_amount: number;
+  reconciled: boolean;
+  created_at: string;
+}
+
+const mapRow = (row: LedgerRow): Invoice => ({
+  id: row.id,
+  vendor: row.supplier_name ?? "Unknown",
+  amount: row.gross_amount ?? 0,
+  status: row.reconciled ? "reconciled" : "vision",
+  ref: row.id.slice(0, 8).toUpperCase(),
+});
 
 const ReconciliationStream = () => {
-  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [flashId, setFlashId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Simulate a match event every 8s for demo
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setInvoices((prev) => {
-        const pending = prev.filter((i) => i.status !== "reconciled");
-        if (pending.length === 0) return prev;
-        const target = pending[0];
-        const nextStatus: InvoiceStatus = target.status === "intake" ? "vision" : "reconciled";
-        setFlashId(target.id);
-        setTimeout(() => setFlashId(null), 1200);
-        return prev.map((i) =>
-          i.id === target.id ? { ...i, status: nextStatus, ...(nextStatus === "reconciled" ? { matchedAt: Date.now() } : {}) } : i
-        );
-      });
-    }, 8000);
-    return () => clearInterval(interval);
+  const fetchInvoices = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("financial_ledger")
+      .select("id, supplier_name, gross_amount, reconciled, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Failed to fetch financial_ledger:", error.message);
+    } else if (data) {
+      setInvoices((data as LedgerRow[]).map(mapRow));
+    }
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    fetchInvoices();
+
+    const channel = supabase
+      .channel("financial_ledger_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "financial_ledger" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const newInvoice = mapRow(payload.new as LedgerRow);
+            setFlashId(newInvoice.id);
+            setTimeout(() => setFlashId(null), 1200);
+            setInvoices((prev) => [newInvoice, ...prev]);
+          } else if (payload.eventType === "UPDATE") {
+            const updated = mapRow(payload.new as LedgerRow);
+            setFlashId(updated.id);
+            setTimeout(() => setFlashId(null), 1200);
+            setInvoices((prev) =>
+              prev.map((i) => (i.id === updated.id ? updated : i))
+            );
+          } else if (payload.eventType === "DELETE" && payload.old) {
+            setInvoices((prev) =>
+              prev.filter((i) => i.id !== (payload.old as LedgerRow).id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchInvoices]);
 
   return (
     <div className="flex flex-col gap-1">
@@ -59,46 +98,53 @@ const ReconciliationStream = () => {
           {invoices.filter((i) => i.status === "reconciled").length}/{invoices.length} matched
         </span>
       </div>
-      <div className="flex flex-col gap-px">
-        {invoices.map((invoice, idx) => {
-          const config = STATUS_CONFIG[invoice.status];
-          const Icon = config.icon;
-          const isFlashing = flashId === invoice.id;
-          return (
-            <div
-              key={invoice.id}
-              className={`flex items-center gap-4 px-4 py-3 rounded-sm transition-all duration-300 ${
-                isFlashing ? "animate-match-flash" : ""
-              } hover:bg-accent/50`}
-              style={{ animationDelay: `${idx * 60}ms` }}
-            >
-              {/* Status pip */}
-              <div className="flex flex-col items-center gap-1 w-16 shrink-0">
-                <div className={`w-2 h-2 rounded-full ${config.color} ${invoice.status === "reconciled" ? "animate-pulse-glow" : ""}`} />
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{config.sublabel}</span>
-              </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold truncate" style={{ color: "hsl(var(--text-primary))" }}>
-                    {invoice.vendor}
-                  </span>
-                  <span className="text-xs text-muted-foreground tabular-nums">{invoice.ref}</span>
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <span className="text-sm text-muted-foreground animate-pulse">Connecting to ledger…</span>
+        </div>
+      ) : invoices.length === 0 ? (
+        <div className="flex items-center justify-center py-12">
+          <span className="text-sm text-muted-foreground">No entries in the ledger.</span>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-px">
+          {invoices.map((invoice, idx) => {
+            const config = STATUS_CONFIG[invoice.status];
+            const Icon = config.icon;
+            const isFlashing = flashId === invoice.id;
+            return (
+              <div
+                key={invoice.id}
+                className={`flex items-center gap-4 px-4 py-3 rounded-sm transition-all duration-300 ${
+                  isFlashing ? "animate-match-flash" : ""
+                } hover:bg-accent/50`}
+                style={{ animationDelay: `${idx * 60}ms` }}
+              >
+                <div className="flex flex-col items-center gap-1 w-16 shrink-0">
+                  <div className={`w-2 h-2 rounded-full ${config.color} ${invoice.status === "reconciled" ? "animate-pulse-glow" : ""}`} />
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{config.sublabel}</span>
                 </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-semibold truncate" style={{ color: "hsl(var(--text-primary))" }}>
+                      {invoice.vendor}
+                    </span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{invoice.ref}</span>
+                  </div>
+                </div>
+
+                <span className="text-sm font-bold tabular-nums shrink-0" style={{ color: "hsl(var(--text-primary))" }}>
+                  ${invoice.amount.toLocaleString()}
+                </span>
+
+                <Icon className="w-4 h-4 shrink-0" style={{ color: `hsl(var(--${invoice.status === "intake" ? "intake" : invoice.status === "vision" ? "vision" : "reconciled"}))` }} />
               </div>
-
-              {/* Amount */}
-              <span className="text-sm font-bold tabular-nums shrink-0" style={{ color: "hsl(var(--text-primary))" }}>
-                ${invoice.amount.toLocaleString()}
-              </span>
-
-              {/* Status icon */}
-              <Icon className="w-4 h-4 shrink-0" style={{ color: `hsl(var(--${invoice.status === "intake" ? "intake" : invoice.status === "vision" ? "vision" : "reconciled"}))` }} />
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
