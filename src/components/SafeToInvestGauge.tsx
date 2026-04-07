@@ -54,7 +54,7 @@ const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, alloca
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={`text-4xl font-black tracking-tight ${isHealthy ? "text-gradient-signal" : "text-destructive"}`}>
-            ${Math.abs(safeToInvest).toLocaleString()}
+            £{Math.abs(safeToInvest).toLocaleString()}
           </span>
           <span className="text-xs font-medium tracking-widest uppercase text-muted-foreground mt-1">
             Safe to Invest
@@ -78,7 +78,7 @@ const FormulaItem = ({ label, value, positive }: { label: string; value: number;
   <div className="flex flex-col items-center gap-0.5">
     <span className="text-muted-foreground uppercase tracking-wider text-[10px]">{label}</span>
     <span className={`font-semibold tabular-nums ${positive ? "text-signal" : "text-foreground"}`}>
-      ${value.toLocaleString()}
+      £{value.toLocaleString()}
     </span>
   </div>
 );

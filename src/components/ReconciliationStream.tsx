@@ -174,7 +174,7 @@ const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
                 </div>
 
                 <span className="text-sm font-bold tabular-nums shrink-0" style={{ color: "hsl(var(--text-primary))" }}>
-                  ${invoice.amount.toLocaleString()}
+                  £{invoice.amount.toLocaleString()}
                 </span>
 
                 <Icon className="w-4 h-4 shrink-0" style={{ color: `hsl(var(--${invoice.status === "intake" ? "intake" : invoice.status === "vision" ? "vision" : "reconciled"}))` }} />
