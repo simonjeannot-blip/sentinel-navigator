@@ -1,4 +1,4 @@
-import React, { useMemo, forwardRef } from "react";
+import { useMemo } from "react";
 
 interface GaugeProps {
   revenue: number;
@@ -9,7 +9,7 @@ interface GaugeProps {
   allocations: number;
 }
 
-const SafeToInvestGauge = forwardRef<HTMLDivElement, GaugeProps>(({ revenue, payments, operations, vendor, debt, allocations }, ref) => {
+const SafeToInvestGauge = ({ revenue, payments, operations, vendor, debt, allocations }: GaugeProps) => {
   const safeToInvest = useMemo(
     () => (revenue - payments) - (operations + vendor + debt + allocations),
     [revenue, payments, operations, vendor, debt, allocations]
@@ -26,7 +26,7 @@ const SafeToInvestGauge = forwardRef<HTMLDivElement, GaugeProps>(({ revenue, pay
   const rotation = 135;
 
   return (
-    <div ref={ref} className="flex flex-col items-center gap-6">
+    <div className="flex flex-col items-center gap-6">
       <div className="relative w-52 h-52">
         <svg viewBox="0 0 200 200" className="w-full h-full -rotate-[0deg]">
           <circle
@@ -72,9 +72,7 @@ const SafeToInvestGauge = forwardRef<HTMLDivElement, GaugeProps>(({ revenue, pay
       </div>
     </div>
   );
-});
-
-SafeToInvestGauge.displayName = "SafeToInvestGauge";
+};
 
 const FormulaItem = ({ label, value, positive }: { label: string; value: number; positive?: boolean }) => (
   <div className="flex flex-col items-center gap-0.5">

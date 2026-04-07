@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, forwardRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FileText, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -42,7 +42,7 @@ interface ReconciliationStreamProps {
   onDataLoaded?: (invoices: Invoice[]) => void;
 }
 
-const ReconciliationStream = forwardRef<HTMLDivElement, ReconciliationStreamProps>(({ onDataLoaded }, ref) => {
+const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,7 +127,7 @@ const ReconciliationStream = forwardRef<HTMLDivElement, ReconciliationStreamProp
     : "text-warning";
 
   return (
-    <div ref={ref} className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
           Reconciliation Stream
@@ -196,8 +196,6 @@ const ReconciliationStream = forwardRef<HTMLDivElement, ReconciliationStreamProp
       </div>
     </div>
   );
-});
-
-ReconciliationStream.displayName = "ReconciliationStream";
+};
 
 export default ReconciliationStream;
