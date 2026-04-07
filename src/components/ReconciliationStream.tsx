@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { FileText, Eye, ShieldCheck } from "lucide-react";
-import { supabase } from "@/integrations/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 
 type InvoiceStatus = "intake" | "vision" | "reconciled";
 
@@ -10,6 +10,7 @@ interface Invoice {
   amount: number;
   status: InvoiceStatus;
   ref: string;
+  reconciled: boolean;
 }
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; sublabel: string; color: string; icon: typeof FileText }> = {
@@ -32,12 +33,25 @@ const mapRow = (row: LedgerRow): Invoice => ({
   amount: row.gross_amount ?? 0,
   status: row.reconciled ? "reconciled" : "vision",
   ref: row.id.slice(0, 8).toUpperCase(),
+  reconciled: !!row.reconciled,
 });
 
-const ReconciliationStream = () => {
+interface ReconciliationStreamProps {
+  onDataLoaded?: (invoices: Invoice[]) => void;
+}
+
+const ReconciliationStream = ({ onDataLoaded }: ReconciliationStreamProps) => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [flashId, setFlashId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const updateAndNotify = useCallback((updater: (prev: Invoice[]) => Invoice[]) => {
+    setInvoices((prev) => {
+      const next = updater(prev);
+      onDataLoaded?.(next);
+      return next;
+    });
+  }, [onDataLoaded]);
 
   const fetchInvoices = useCallback(async () => {
     const { data, error } = await supabase
@@ -48,10 +62,12 @@ const ReconciliationStream = () => {
     if (error) {
       console.error("Failed to fetch financial_ledger:", error.message);
     } else if (data) {
-      setInvoices((data as LedgerRow[]).map(mapRow));
+      const mapped = (data as LedgerRow[]).map(mapRow);
+      setInvoices(mapped);
+      onDataLoaded?.(mapped);
     }
     setLoading(false);
-  }, []);
+  }, [onDataLoaded]);
 
   useEffect(() => {
     fetchInvoices();
@@ -66,16 +82,16 @@ const ReconciliationStream = () => {
             const newInvoice = mapRow(payload.new as LedgerRow);
             setFlashId(newInvoice.id);
             setTimeout(() => setFlashId(null), 1200);
-            setInvoices((prev) => [newInvoice, ...prev]);
+            updateAndNotify((prev) => [newInvoice, ...prev]);
           } else if (payload.eventType === "UPDATE") {
             const updated = mapRow(payload.new as LedgerRow);
             setFlashId(updated.id);
             setTimeout(() => setFlashId(null), 1200);
-            setInvoices((prev) =>
+            updateAndNotify((prev) =>
               prev.map((i) => (i.id === updated.id ? updated : i))
             );
           } else if (payload.eventType === "DELETE" && payload.old) {
-            setInvoices((prev) =>
+            updateAndNotify((prev) =>
               prev.filter((i) => i.id !== (payload.old as LedgerRow).id)
             );
           }
@@ -86,7 +102,7 @@ const ReconciliationStream = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchInvoices]);
+  }, [fetchInvoices, updateAndNotify]);
 
   return (
     <div className="flex flex-col gap-1">

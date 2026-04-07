@@ -1,9 +1,48 @@
+import { useState, useCallback } from "react";
 import SafeToInvestGauge from "@/components/SafeToInvestGauge";
 import ReconciliationStream from "@/components/ReconciliationStream";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
+interface InvoiceData {
+  amount: number;
+  reconciled: boolean;
+}
+
 const Index = () => {
+  const [gaugeData, setGaugeData] = useState({
+    revenue: 0,
+    payments: 0,
+    operations: 0,
+    vendor: 0,
+    debt: 0,
+    allocations: 0,
+  });
+
+  const handleDataLoaded = useCallback((invoices: InvoiceData[]) => {
+    const totalRevenue = invoices
+      .filter((i) => i.reconciled)
+      .reduce((sum, i) => sum + i.amount, 0);
+
+    // Floating Debt = sum of gross_amount where reconciled is FALSE
+    const floatingDebt = invoices
+      .filter((i) => !i.reconciled)
+      .reduce((sum, i) => sum + i.amount, 0);
+
+    // Split floating debt into operations + vendor for the S-formula
+    const operationsCost = Math.round(floatingDebt * 0.6);
+    const vendorCost = Math.round(floatingDebt * 0.4);
+
+    setGaugeData({
+      revenue: totalRevenue,
+      payments: 0,
+      operations: operationsCost,
+      vendor: vendorCost,
+      debt: 0,
+      allocations: 0,
+    });
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -22,19 +61,12 @@ const Index = () => {
       <main className="max-w-6xl mx-auto px-8 py-10 grid grid-cols-1 lg:grid-cols-5 gap-10">
         {/* Gauge — left 2 cols */}
         <section className="lg:col-span-2 flex justify-center animate-fade-in-up">
-          <SafeToInvestGauge
-            revenue={142500}
-            payments={38200}
-            operations={22400}
-            vendor={14250}
-            debt={8730}
-            allocations={12600}
-          />
+          <SafeToInvestGauge {...gaugeData} />
         </section>
 
         {/* Stream — right 3 cols */}
         <section className="lg:col-span-3 animate-fade-in-up" style={{ animationDelay: "100ms" }}>
-          <ReconciliationStream />
+          <ReconciliationStream onDataLoaded={handleDataLoaded} />
         </section>
       </main>
     </div>
