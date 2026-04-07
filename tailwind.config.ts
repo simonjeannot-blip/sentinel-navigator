@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -47,6 +50,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        signal: {
+          DEFAULT: "hsl(var(--signal))",
+          foreground: "hsl(var(--signal-foreground))",
+        },
+        surface: {
+          elevated: "hsl(var(--surface-elevated))",
+        },
+        intake: "hsl(var(--intake))",
+        vision: "hsl(var(--vision))",
+        reconciled: "hsl(var(--reconciled))",
+        warning: "hsl(var(--warning))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
