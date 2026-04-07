@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import SafeToInvestGauge from "@/components/SafeToInvestGauge";
 import ReconciliationStream from "@/components/ReconciliationStream";
+import BookEntryModal from "@/components/BookEntryModal";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
@@ -10,6 +11,7 @@ interface InvoiceData {
 }
 
 const Index = () => {
+  const [modalOpen, setModalOpen] = useState(false);
   const [gaugeData, setGaugeData] = useState({
     revenue: 0,
     payments: 0,
@@ -24,12 +26,10 @@ const Index = () => {
       .filter((i) => i.reconciled)
       .reduce((sum, i) => sum + i.amount, 0);
 
-    // Floating Debt = sum of gross_amount where reconciled is FALSE
     const floatingDebt = invoices
       .filter((i) => !i.reconciled)
       .reduce((sum, i) => sum + i.amount, 0);
 
-    // Split floating debt into operations + vendor for the S-formula
     const operationsCost = Math.round(floatingDebt * 0.6);
     const vendorCost = Math.round(floatingDebt * 0.4);
 
@@ -45,30 +45,28 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="flex items-center justify-between px-8 py-6 border-b border-border/50">
         <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-black uppercase tracking-widest text-foreground">Navigator</h1>
           <span className="text-xs font-medium text-muted-foreground tracking-wider">Financial OS</span>
         </div>
-        <Button variant="clinical" size="lg">
+        <Button variant="clinical" size="lg" onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" />
           Book Entry
         </Button>
       </header>
 
-      {/* Main grid */}
       <main className="max-w-6xl mx-auto px-8 py-10 grid grid-cols-1 lg:grid-cols-5 gap-10">
-        {/* Gauge — left 2 cols */}
         <section className="lg:col-span-2 flex justify-center animate-fade-in-up">
           <SafeToInvestGauge {...gaugeData} />
         </section>
 
-        {/* Stream — right 3 cols */}
         <section className="lg:col-span-3 animate-fade-in-up" style={{ animationDelay: "100ms" }}>
           <ReconciliationStream onDataLoaded={handleDataLoaded} />
         </section>
       </main>
+
+      <BookEntryModal open={modalOpen} onOpenChange={setModalOpen} />
     </div>
   );
 };
