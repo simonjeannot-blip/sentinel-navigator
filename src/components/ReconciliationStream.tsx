@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, forwardRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FileText, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
